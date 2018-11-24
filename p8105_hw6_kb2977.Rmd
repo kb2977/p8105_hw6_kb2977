@@ -10,6 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 library(tidyverse)
 library(dbplyr)
+library(modelr)
 ```
 
 ###Problem 1:
@@ -123,24 +124,108 @@ OR_plot = nest_glm_results %>%
 OR_plot
 ```
 
-*The odd ratios of solving homicides for black victims to white victims is highest for Tampa, FL and lowest for Boston, MA. Only about three cities (Birmingham, AL, Durham, NC, and Tampa, FL) have a odds ratio of greater than 1. The rest have an odds ratio of less than 1. Long Beach, CA seems to have an OR around 1 meaning the odds of solving homicides for black victims is similar, if not the same, to the odds of solving homicides for white victims in Long Beach, CA.
+*The odd ratios of solving homicides for black victims to white victims is highest for Tampa, FL and lowest for Boston, MA. Only about three cities (Birmingham, AL, Durham, NC, and Tampa, FL) have a odds ratio of greater than 1. The rest have an odds ratio of less than 1. This means that homicides in which the victim is black are substantially less likely to be resolved that those in which the victim is white Long Beach, CA seems to have an OR around 1 meaning the odds of solving homicides for black victims is similar, if not the same, to the odds of solving homicides for white victims in Long Beach, CA.
 
 ###Problem 2:
+
+####Part 1: Cleaning Data
+* Load and clean the data for regression analysis (i.e. convert numeric to factor where appropriate, check for missing data, etc.)
 
 ```{r birthweight_data}
 birthweight_data = 
   read_csv(file = "./data/birthweight.csv") %>% 
-  janitor::clean_names()
+  janitor::clean_names() %>% 
+  mutate(frace = as.factor(frace),
+         mrace = as.factor(mrace),
+         malform = as.factor(malform),
+         babysex = as.factor(babysex)) %>% 
+  na.omit()
+
+birthweight_data[!complete.cases(birthweight_data), ] #no missing data!
 ```
 
-Load and clean the data for regression analysis (i.e. convert numeric to factor where appropriate, check for missing data, etc.).
+This dataset consists of `r nrow(birthweight_data)` observations and `r ncol(birthweight_data)` variables. The following variables are in this dataset: `r ls(birthweight_data)`. The dataset was cleaned and four variables were changed to factor variables.
 
-Propose a regression model for birthweight. This model may be based on a hypothesized structure for the factors that underly birthweight, on a data-driven model-building process, or a combination of the two. Describe your modeling process and show a plot of model residuals against fitted values – use add_predictions and add_residuals in making this plot.
+####Part 2: Propose a regression model for birthweight. 
+* Below, I developed a fitted model for predicting birthweight using mother's weight at delivery. I predicted that there is a positive linear relationship between mother's weight and baby's birthweight. I included the variables malform (presence of malformations that could affect weight) and fincome (family monthly income) as covariates as I believe that these could affect the relationship between our exposure and outcome.
 
-Compare your model to two others:
+```{r fitted model 1}
+fit_model_1 = lm(bwt ~ delwt + malform + fincome, data = birthweight_data) 
 
-One using length at birth and gestational age as predictors (main effects only)
-One using head circumference, length, sex, and all interactions (including the three-way interaction) between these
-Make this comparison in terms of the cross-validated prediction error; use crossv_mc and functions in purrr as appropriate.
+##First, I checked to make sure the residuals for the variable delwt were centered around zero 
+birthweight_data %>% 
+  add_residuals(fit_model_1) %>%
+  ggplot(aes(x = delwt, y = resid)) + 
+    geom_violin() +
+    labs(title = "Residuals vs. Mother's Weight",
+         x = "Mother's Weight at Delivery in Pounds", 
+         y = "Residuals")
+
+##Then, I checked for linearity between delwt (mother's weight) and bwt (birthweight)
+birthweight_data %>% 
+  ggplot(aes(x = delwt, y = bwt)) + 
+    geom_point(alpha = 0.5) + 
+    geom_smooth() +
+    labs(title = "Birthweight vs. Mother's Weight",
+         x = "Mother's Weight at Delivery in Pounds", 
+         y = "Infant Birthweight in Grams")
+
+##Lastly, I plotted predicted values of infant birthweight (bwt) and residuals to examine if there is constant variance
+birthweight_data %>% 
+  add_residuals(fit_model_1) %>% 
+  add_predictions(fit_model_1) %>% 
+  ggplot(aes(x = pred, y = resid)) +
+    geom_point(alpha = 0.5) +
+    stat_smooth(method = "lm") +
+    labs(title = "Residuals vs. Predicted Birthweight",
+        x = "Fitted Values for Infant Birthweight",
+        y = "Residuals")
+```
+
+Given the plots above, the residuals appear to be centered around 0 with no clear pattern. Most of the predicted data points are around 3000-3200 grams, however, the residuals are very spread in that they range from more than -2500 to more than 1500. This could mean that this model isn't the best at predicting birthweight.
+Furthermore, when examining the linear plot between mother's weight at delivery and infant birthweight, the relationship, although positive, does not seem extremely linear as the 
+smooth line fitted to this plot is not straight but curved. It is evident from this plot that there is one observation, `r max(birthweight_data$delwt)` for mother's weight at delivery in pounds, that seems to be an outlier.
+
+####Part 3: Compare your model to two others
+* One using length at birth and gestational age as predictors (main effects only)
+
+```{r fitted model 2}
+fit_model_2 = lm(bwt ~ gaweeks + blength, data = birthweight_data)
+```
+
+* One using head circumference, length, sex, and all interactions (including the three-way interaction) between these
+```{r fit model interaction}
+fit_model_3 = lm(bwt ~ bhead + blength + babysex + bhead*blength + blength*babysex + bhead*babysex + bhead*blength*babysex, data = birthweight_data)
+```
+
+* Make this comparison in terms of the cross-validated prediction error; use crossv_mc and functions in purrr as appropriate.
+
+```{r compare models}
+cv_df =
+  modelr::crossv_mc(birthweight_data, 100)
+cv_df %>% pull(train) %>% .[[1]] %>% as_tibble
+cv_df %>% pull(test) %>% .[[1]] %>% as_tibble
+
+cv_df =
+  cv_df %>% 
+  mutate(train = map(train, as_tibble),
+         test = map(test, as_tibble))
+```
+
+```{r}
+cv_df = 
+  cv_df %>% 
+  mutate(model_1 = map(train, ~lm(bwt ~ gaweeks, data = birthweight_data)),
+         model_2 = map(train, ~lm(bwt ~ gaweeks + blength, data = birthweight_data))) %>% 
+  mutate(rmse_model_1 = map2_dbl(model_1, test, ~rmse(model = .x, data = birthweight_data)),
+         rmse_model_2 = map2_dbl(model_2, test, ~rmse(model = .x, data = birthweight_data)))
+
+cv_df %>% 
+  select(starts_with("rmse")) %>% 
+  gather(key = model, value = rmse) %>% 
+  mutate(model = str_replace(model, "rmse_", ""),
+         model = fct_inorder(model)) %>% 
+  ggplot(aes(x = model, y = rmse)) + geom_violin()
+```
 
 Note that although we expect your model to be reasonable, model building itself is not a main idea of the course and we don’t necessarily expect your model to be “optimal”.
