@@ -15,12 +15,15 @@ library(modelr)
 
 ###Problem 1:
 
+####Part 1: Modifying and Cleaning Dataset
+
+* Read in Homicide Data
+
 ```{r homicide_data}
 homicide_data = read_csv("https://raw.githubusercontent.com/washingtonpost/data-homicides/master/homicide-data.csv")
 ```
 
-####Part 1: Modifying and Cleaning Dataset
-* Create a city_state variable (e.g. “Baltimore, MD”), and a binary variable indicating whether the homicide is solved. Omit cities Dallas, TX; Phoenix, AZ; and Kansas City, MO – these don’t report victim race. Also omit Tulsa, AL – this is a data entry mistake.
+* Created a city_state variable (e.g. “Baltimore, MD”), and a binary variable indicating whether the homicide is solved. Omit cities Dallas, TX; Phoenix, AZ; and Kansas City, MO – these don’t report victim race. Also omit Tulsa, AL – this is a data entry mistake.
 
 ```{r cleaning}
 homicide_data = homicide_data %>% 
@@ -32,10 +35,9 @@ homicide_data = homicide_data %>%
                          "Closed by arrest" = "yes")) %>% 
   mutate(solved = as.factor(solved))
 homicide_data = homicide_data[!(homicide_data$city_state %in% c("Dallas, TX", "Phoenix, AZ", "Kansas City, MO", "Tulsa, AL")), ]
-
 ```
 
-* Modify victim_race to have categories white and non-white, with white as the reference category. Be sure that victim_age is numeric.
+* Modified victim_race to have categories white and non-white, with white as the reference category. Be sure that victim_age is numeric.
 
 ```{r modify victim_race}
 homicide_data = 
@@ -51,7 +53,7 @@ homicide_data =
 ```
 
 ####Part 2: Baltimore, MD
-* For the city of Baltimore, MD, use the glm function to fit a logistic regression with resolved vs unresolved as the outcome and victim age, sex and race (as just defined) as predictors. Save the output of glm as an R object; apply the broom::tidy to this object; and obtain the estimate and confidence interval of the adjusted odds ratio for solving homicides comparing black victims to white victims keeping all other variables fixed.
+* For the city of Baltimore, MD, I used the glm function to fit a logistic regression with resolved vs unresolved as the outcome and victim age, sex and race (as just defined) as predictors. Save the output of glm as an R object; apply the broom::tidy to this object; and obtain the estimate and confidence interval of the adjusted odds ratio for solving homicides comparing black victims to white victims keeping all other variables fixed.
 
 ```{r fitted logistic regression for Baltimore}
 logistic_balt = 
@@ -107,7 +109,7 @@ nest_glm_results %>%
 ```
 
 ####Part 4: Plot for Each City
-*Create a plot that shows the estimated ORs and CIs for each city. Organize cities according to estimated OR, and comment on the plot.
+* Create a plot that shows the estimated ORs and CIs for each city. Organize cities according to estimated OR, and comment on the plot.
 
 ```{r OR plots}
 OR_plot = nest_glm_results %>%
@@ -124,13 +126,11 @@ OR_plot = nest_glm_results %>%
 OR_plot
 ```
 
-*The odd ratios of solving homicides for black victims to white victims is highest for Tampa, FL and lowest for Boston, MA. Only about three cities (Birmingham, AL, Durham, NC, and Tampa, FL) have a odds ratio of greater than 1. The rest have an odds ratio of less than 1. This means that homicides in which the victim is black are substantially less likely to be resolved that those in which the victim is white Long Beach, CA seems to have an OR around 1 meaning the odds of solving homicides for black victims is similar, if not the same, to the odds of solving homicides for white victims in Long Beach, CA.
+The odd ratios of solving homicides for black victims to white victims is highest for Tampa, FL and lowest for Boston, MA. Only about three cities (Birmingham, AL, Durham, NC, and Tampa, FL) have a odds ratio of greater than 1. The rest have an odds ratio of less than 1. This means that homicides in which the victim is black are substantially less likely to be resolved that those in which the victim is white Long Beach, CA seems to have an OR around 1 meaning the odds of solving homicides for black victims is similar, if not the same, to the odds of solving homicides for white victims in Long Beach, CA.
 
 ###Problem 2:
 
-####Part 1: Cleaning Data
-* Load and clean the data for regression analysis (i.e. convert numeric to factor where appropriate, check for missing data, etc.)
-
+####Part 1: Loading and Cleaning Data 
 ```{r birthweight_data}
 birthweight_data = 
   read_csv(file = "./data/birthweight.csv") %>% 
@@ -150,11 +150,11 @@ This dataset consists of `r nrow(birthweight_data)` observations and `r ncol(bir
 * Below, I developed a fitted model for predicting birthweight using mother's weight at delivery. I predicted that there is a positive linear relationship between mother's weight and baby's birthweight. I included the variables malform (presence of malformations that could affect weight) and fincome (family monthly income) as covariates as I believe that these could affect the relationship between our exposure and outcome.
 
 ```{r fitted model 1}
-fit_model_1 = lm(bwt ~ delwt + malform + fincome, data = birthweight_data) 
+model_1 = lm(bwt ~ delwt + malform + fincome, data = birthweight_data) 
 
 ##First, I checked to make sure the residuals for the variable delwt were centered around zero 
 birthweight_data %>% 
-  add_residuals(fit_model_1) %>%
+  add_residuals(model_1) %>%
   ggplot(aes(x = delwt, y = resid)) + 
     geom_violin() +
     labs(title = "Residuals vs. Mother's Weight",
@@ -162,70 +162,76 @@ birthweight_data %>%
          y = "Residuals")
 
 ##Then, I checked for linearity between delwt (mother's weight) and bwt (birthweight)
-birthweight_data %>% 
+lin_plot = 
+  birthweight_data %>% 
   ggplot(aes(x = delwt, y = bwt)) + 
     geom_point(alpha = 0.5) + 
     geom_smooth() +
     labs(title = "Birthweight vs. Mother's Weight",
          x = "Mother's Weight at Delivery in Pounds", 
          y = "Infant Birthweight in Grams")
+lin_plot
 
 ##Lastly, I plotted predicted values of infant birthweight (bwt) and residuals to examine if there is constant variance
-birthweight_data %>% 
-  add_residuals(fit_model_1) %>% 
-  add_predictions(fit_model_1) %>% 
-  ggplot(aes(x = pred, y = resid)) +
-    geom_point(alpha = 0.5) +
-    stat_smooth(method = "lm") +
-    labs(title = "Residuals vs. Predicted Birthweight",
+pred_vs_resid = 
+  birthweight_data %>% 
+    add_residuals(model_1) %>% 
+    add_predictions(model_1) %>% 
+    ggplot(aes(x = pred, y = resid)) +
+      geom_point(alpha = 0.5) +
+      stat_smooth(method = "lm") +
+      labs(title = "Residuals vs. Predicted Birthweight",
         x = "Fitted Values for Infant Birthweight",
         y = "Residuals")
+pred_vs_resid
 ```
 
 Given the plots above, the residuals appear to be centered around 0 with no clear pattern. Most of the predicted data points are around 3000-3200 grams, however, the residuals are very spread in that they range from more than -2500 to more than 1500. This could mean that this model isn't the best at predicting birthweight.
+
 Furthermore, when examining the linear plot between mother's weight at delivery and infant birthweight, the relationship, although positive, does not seem extremely linear as the 
 smooth line fitted to this plot is not straight but curved. It is evident from this plot that there is one observation, `r max(birthweight_data$delwt)` for mother's weight at delivery in pounds, that seems to be an outlier.
 
-####Part 3: Compare your model to two others
+####Part 3: Comparing My Model to Two Others 
 * One using length at birth and gestational age as predictors (main effects only)
 
 ```{r fitted model 2}
-fit_model_2 = lm(bwt ~ gaweeks + blength, data = birthweight_data)
+model_2 = lm(bwt ~ gaweeks + blength, data = birthweight_data)
 ```
 
-* One using head circumference, length, sex, and all interactions (including the three-way interaction) between these
+* One using head circumference, length, sex, and all interactions (including the three-way interaction)
 ```{r fit model interaction}
-fit_model_3 = lm(bwt ~ bhead + blength + babysex + bhead*blength + blength*babysex + bhead*babysex + bhead*blength*babysex, data = birthweight_data)
+model_3 = lm(bwt ~ bhead + blength + babysex + bhead*blength + blength*babysex + bhead*babysex + bhead*blength*babysex, data = birthweight_data)
 ```
 
 * Make this comparison in terms of the cross-validated prediction error; use crossv_mc and functions in purrr as appropriate.
 
 ```{r compare models}
-cv_df =
-  modelr::crossv_mc(birthweight_data, 100)
-cv_df %>% pull(train) %>% .[[1]] %>% as_tibble
-cv_df %>% pull(test) %>% .[[1]] %>% as_tibble
+set.seed(1)
 
-cv_df =
-  cv_df %>% 
-  mutate(train = map(train, as_tibble),
-         test = map(test, as_tibble))
-```
+cv_df = crossv_mc(birthweight_data, 100)
 
-```{r}
-cv_df = 
-  cv_df %>% 
-  mutate(model_1 = map(train, ~lm(bwt ~ gaweeks, data = birthweight_data)),
-         model_2 = map(train, ~lm(bwt ~ gaweeks + blength, data = birthweight_data))) %>% 
-  mutate(rmse_model_1 = map2_dbl(model_1, test, ~rmse(model = .x, data = birthweight_data)),
-         rmse_model_2 = map2_dbl(model_2, test, ~rmse(model = .x, data = birthweight_data)))
+cv_df = cv_df %>% 
+  mutate(model_1 = map(train, ~lm(bwt ~ delwt + malform + fincome, data = birthweight_data)),
+         model_2 = map(train, ~lm(bwt ~ gaweeks + blength, data = birthweight_data)), 
+         model_3 = map(train, ~lm(bwt ~ bhead + blength + babysex + bhead*blength + 
+                                      blength*babysex + bhead*babysex + bhead*blength*babysex, 
+                                      data = birthweight_data))
+         ) %>% 
+  mutate(rmse_model_1 = map2_dbl(model_1, test, ~rmse(model = .x, data = .y)),
+         rmse_model_2 = map2_dbl(model_2, test, ~rmse(model = .x, data = .y)),
+         rmse_model_3 = map2_dbl(model_3, test, ~rmse(model = .x, data = .y)))
 
-cv_df %>% 
+rmse_plot = cv_df %>% 
   select(starts_with("rmse")) %>% 
   gather(key = model, value = rmse) %>% 
   mutate(model = str_replace(model, "rmse_", ""),
          model = fct_inorder(model)) %>% 
-  ggplot(aes(x = model, y = rmse)) + geom_violin()
+  ggplot(aes(x = model, y = rmse)) + 
+    geom_violin() +
+    labs(title = "Prediction Errors for Each of the Models",
+        x = "Models",
+        y = "Root Mean Squared Errors")
+rmse_plot
 ```
 
-Note that although we expect your model to be reasonable, model building itself is not a main idea of the course and we don’t necessarily expect your model to be “optimal”.
+Given the RMSE plot above, it is evident that Model 3 (interaction model)
