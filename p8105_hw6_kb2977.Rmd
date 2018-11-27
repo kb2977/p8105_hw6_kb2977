@@ -37,7 +37,7 @@ homicide_data = homicide_data %>%
 homicide_data = homicide_data[!(homicide_data$city_state %in% c("Dallas, TX", "Phoenix, AZ", "Kansas City, MO", "Tulsa, AL")), ]
 ```
 
-* Modified victim_race to have categories white and non-white, with white as the reference category. Be sure that victim_age is numeric.
+* Modified victim_race to have categories white and non-white, with white as the reference category. Be sure that victim_age is numeric. I also got rid of unknown values for victim_race.
 
 ```{r modify victim_race}
 homicide_data = 
@@ -49,18 +49,19 @@ homicide_data =
                          "Other" = "non-white",
                          "Asian" = "non-white")) %>% 
   mutate(victim_race_cat = fct_infreq(victim_race_cat)) %>% 
-  mutate(victim_age = as.numeric(victim_age))
+  mutate(victim_age = as.numeric(victim_age)) %>% 
+  filter(!victim_race_cat == "unknown")
 ```
 
 ####Part 2: Baltimore, MD
-* For the city of Baltimore, MD, I used the glm function to fit a logistic regression with resolved vs unresolved as the outcome and victim age, sex and race (as just defined) as predictors. Save the output of glm as an R object; apply the broom::tidy to this object; and obtain the estimate and confidence interval of the adjusted odds ratio for solving homicides comparing black victims to white victims keeping all other variables fixed.
+* For the city of Baltimore, MD, I used the glm function to fit a logistic regression with resolved vs unresolved as the outcome and victim age, sex and race (as just defined) as predictors. Save the output of glm as an R object; apply the broom::tidy to this object; and obtain the estimate and confidence interval of the adjusted odds ratio for solving homicides comparing non-white victims to white victims keeping all other variables fixed.
 
 ```{r fitted logistic regression for Baltimore}
 logistic_balt = 
   homicide_data %>% 
-  filter(city_state == "Baltimore, MD") %>% 
-  mutate(victim_race = fct_relevel(victim_race, "White")) %>% 
-  glm(solved ~ victim_age + victim_sex + victim_race, data = ., family = binomial()) %>% 
+  filter(city_state == "Baltimore, MD") %>%
+  mutate(victim_race_cat = fct_relevel(victim_race_cat, "White")) %>% 
+  glm(solved ~ victim_age + victim_sex + victim_race_cat, data = ., family = binomial()) %>% 
   broom::tidy() 
 
 logistic_balt %>% 
@@ -68,7 +69,7 @@ logistic_balt %>%
   mutate(OR = exp(estimate)) %>% 
   mutate(lower_CI = exp(estimate - (1.96 * std.error)),
         upper_CI = exp(estimate + (1.96 * std.error))) %>% 
-  filter(term == "victim_raceBlack") %>% 
+  filter(term == "victim_race_catnon-white") %>% 
   select(OR, lower_CI, upper_CI) %>% 
   knitr::kable(digits = 3)
 ```
@@ -81,14 +82,14 @@ CI_for_each_city = function(each_city){
 
   CI = homicide_data %>% 
   filter(city_state == each_city) %>% 
-  mutate(victim_race = fct_relevel(victim_race, "White")) %>% 
-  glm(solved ~ victim_age + victim_sex + victim_race, data = ., family = binomial()) %>% 
+  mutate(victim_race_cat = fct_relevel(victim_race_cat, "White")) %>% 
+  glm(solved ~ victim_age + victim_sex + victim_race_cat, data = ., family = binomial()) %>% 
   broom::tidy() %>% 
   select(term, estimate, std.error) %>% 
   mutate(OR = exp(estimate)) %>% 
   mutate(lower_CI = exp(estimate - (1.96 * std.error)),
         upper_CI = exp(estimate + (1.96 * std.error))) %>% 
-  filter(term == "victim_raceBlack") %>% 
+  filter(term == "victim_race_catnon-white") %>% 
   select(OR, lower_CI, upper_CI) 
   
 CI
@@ -126,7 +127,7 @@ OR_plot = nest_glm_results %>%
 OR_plot
 ```
 
-The odd ratios of solving homicides for black victims to white victims is highest for Tampa, FL and lowest for Boston, MA. Only about three cities (Birmingham, AL, Durham, NC, and Tampa, FL) have a odds ratio of greater than 1. The rest have an odds ratio of less than 1. This means that homicides in which the victim is black are substantially less likely to be resolved that those in which the victim is white Long Beach, CA seems to have an OR around 1 meaning the odds of solving homicides for black victims is similar, if not the same, to the odds of solving homicides for white victims in Long Beach, CA.
+The odd ratios of solving homicides for non-whites victims to white victims is highest for Tampa, FL and lowest for Boston, MA. Only about three cities (Birmingham, AL and Tampa, FL) have a odds ratio of greater than 1. The rest have an odds ratio of less than 1. This means that homicides in which the victims are non-white are substantially less likely to be resolved that those in which the victim is white. Durham, NC seems to have an OR around 1 meaning the odds of solving homicides for non-white victims is similar, if not the same, to the odds of solving homicides for white victims in Long Beach, CA.
 
 ###Problem 2:
 
